@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Customer Support Chatbot — Live Demo | Hammad Durrani</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Fraunces:opsz,wght@9..144,700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg:#10151c; --text:#eef3fa; --muted:#9aabbf; --accent:#f0a05a; --panel:#1a2330; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"DM Sans",system-ui; color:var(--text); min-height:100vh;
+      background: radial-gradient(700px 400px at 100% 0%, rgba(240,160,90,.16), transparent), var(--bg); }
+    .wrap { max-width:640px; margin:0 auto; padding:36px 18px 80px; }
+    h1 { font-family: Fraunces, Georgia, serif; margin:0 0 6px; }
+    .lead { color:var(--muted); line-height:1.5; }
+    .badge { display:inline-block; margin:12px 0; padding:4px 10px; border-radius:999px; background:var(--accent); color:#10151c; font-size:12px; font-weight:700; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    .chip { border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.04); padding:8px 12px; border-radius:999px; font-size:13px; cursor:pointer; color:var(--text); }
+    #log { background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:16px; min-height:320px; max-height:50vh; padding:16px; overflow:auto; }
+    .msg { margin:10px 0; padding:10px 12px; border-radius:12px; max-width:85%; line-height:1.45; font-size:14px; }
+    .user { background:rgba(240,160,90,.18); margin-left:auto; }
+    .bot { background:rgba(255,255,255,.05); }
+    .row { display:flex; gap:8px; margin-top:12px; }
+    input { flex:1; padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,.14); background:#121a24; color:var(--text); font:inherit; }
+    button.send { padding:12px 16px; border:0; border-radius:10px; background:var(--accent); color:#10151c; font-weight:700; cursor:pointer; }
+    footer { margin-top:24px; color:var(--muted); font-size:14px; }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>NovaGear Support</h1>
+    <p class="lead">Offline demo of a customer-support chatbot with contextual memory (order IDs, FAQ grounding). Clone the repo to plug in Groq for live LLM replies.</p>
+    <span class="badge">DEMO · FAQ + memory</span>
+    <div class="chips">
+      <button class="chip" type="button" data-q="My order hasn't arrived yet">Shipping delay</button>
+      <button class="chip" type="button" data-q="It's #12345">Share order #</button>
+      <button class="chip" type="button" data-q="How do returns work?">Returns</button>
+      <button class="chip" type="button" data-q="I need to reset my password">Password reset</button>
+    </div>
+    <div id="log"></div>
+    <div class="row">
+      <input id="q" placeholder="Ask about shipping, returns, billing…" />
+      <button class="send" id="send" type="button">Send</button>
+    </div>
+    <footer>By <a href="https://github.com/hammad-ml-dev">Hammad Durrani</a> · <a href="https://github.com/hammad-ml-dev/Ai-customer-support-chatbot">Source</a></footer>
+  </div>
+  <script>
+    const FAQ = [
+      { keywords: ["ship","delivery","arrive","tracking","order"], id: "shipping",
+        answer: "Orders typically arrive in 3–5 business days within the UAE and 7–12 days internationally. Share your order number (e.g. #12345) and I can explain the next status check steps." },
+      { keywords: ["return","refund","exchange"], id: "returns",
+        answer: "You can return unused items within 30 days of delivery. Start a return from your account → Orders → Return. Refunds post in 5–7 business days after we receive the item." },
+      { keywords: ["password","login","reset","account"], id: "password",
+        answer: "Use Forgot password on the sign-in page. We'll email a reset link that expires in 30 minutes." },
+      { keywords: ["bill","charge","invoice","payment","card"], id: "billing",
+        answer: "Billing invoices are under Account → Billing. Failed charges are usually an expired card or bank decline — update the card and retry." },
+      { keywords: ["hour","support","open","contact","human"], id: "hours",
+        answer: "Human support is available Sun–Thu, 9:00–18:00 GST. For urgent outages, reply with 'escalate' and your account email." },
+    ];
+    const memory = {};
+    const log = document.getElementById("log");
+    const add = (who, text) => {
+      const d = document.createElement("div");
+      d.className = "msg " + who;
+      d.textContent = text;
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+    };
+    const extractOrder = (text) => {
+      const m = text.match(/#?\d{4,}/);
+      if (m && (/order/i.test(text) || text.trim().startsWith("#") || /it'?s/i.test(text))) {
+        memory.order_id = m[0].startsWith("#") ? m[0] : "#" + m[0];
+      }
+    };
+    const reply = (msg) => {
+      extractOrder(msg);
+      const lower = msg.toLowerCase();
+      if (lower.includes("escalate")) {
+        return "I've flagged this for a human specialist. Please reply with your account email and a short summary.";
+      }
+      for (const item of FAQ) {
+        if (item.keywords.some((k) => lower.includes(k))) {
+          let a = item.answer;
+          if (memory.order_id && item.id === "shipping") a += ` I still have your order ${memory.order_id} on file for this chat.`;
+          return a;
+        }
+      }
+      if (memory.order_id && /status|where|update/.test(lower)) {
+        return `For order ${memory.order_id}, typical transit is 3–5 business days. If it has been longer, reply with 'escalate' and your email.`;
+      }
+      return "I can help with shipping, returns, billing, password resets, and support hours. Ask about one of those, or share an order number like #12345.";
+    };
+    const send = () => {
+      const q = document.getElementById("q").value.trim();
+      if (!q) return;
+      document.getElementById("q").value = "";
+      add("user", q);
+      add("bot", reply(q));
+    };
+    document.getElementById("send").onclick = send;
+    document.getElementById("q").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+    document.querySelectorAll(".chip").forEach((b) => b.onclick = () => {
+      document.getElementById("q").value = b.dataset.q;
+      send();
+    });
+    add("bot", "Hi! I'm NovaGear support. Ask about shipping, returns, billing, or share an order number.");
+  </script>
+</body>
+</html>
